@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Replica Exchange</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0d1117;
+    color: #e6edf3;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px;
+  }
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 300;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+    color: #f0f6fc;
+  }
+
+  .subtitle {
+    font-size: 0.95rem;
+    color: #8b949e;
+    margin-bottom: 36px;
+    text-align: center;
+    max-width: 560px;
+    line-height: 1.6;
+  }
+
+  .viz-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    width: 100%;
+    max-width: 960px;
+    margin-bottom: 20px;
+  }
+
+  canvas {
+    display: block;
+    border-radius: 10px;
+    background: #161b22;
+    border: 1px solid #30363d;
+  }
+
+  #landscape  { width: 100%; aspect-ratio: 1 / 0.75; cursor: pointer; }
+  #ladder     { width: 100%; aspect-ratio: 1 / 0.75; cursor: pointer; }
+  #occupancy  { width: 100%; aspect-ratio: 1 / 0.55; }
+  #mixing     { width: 100%; aspect-ratio: 1 / 0.55; cursor: pointer; }
+
+  .controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 14px;
+  }
+
+  .btn-group {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .btn-group-label {
+    font-size: 0.78rem;
+    color: #8b949e;
+    padding: 0 10px 0 2px;
+  }
+  .btn-group button {
+    border: none;
+    border-left: 1px solid #30363d;
+    border-radius: 0;
+    padding: 7px 14px;
+    font-size: 0.85rem;
+  }
+  .btn-group button:first-of-type { border-left: none; }
+
+  .param-row {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 20px;
+  }
+
+  button {
+    padding: 9px 22px;
+    border-radius: 6px;
+    border: 1px solid #30363d;
+    background: #21262d;
+    color: #e6edf3;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  button:hover { background: #30363d; }
+  button.active { background: #1f6feb; border-color: #388bfd; }
+
+  .knob {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.78rem;
+    color: #8b949e;
+  }
+  .knob-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .knob-val {
+    font-size: 0.85rem;
+    color: #e6edf3;
+    min-width: 32px;
+    text-align: center;
+  }
+  .knob label { font-size: 0.78rem; color: #8b949e; }
+
+  input[type=range] {
+    accent-color: #388bfd;
+    width: 100px;
+    cursor: pointer;
+  }
+
+  .legend {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    justify-content: center;
+    font-size: 0.82rem;
+    color: #8b949e;
+    margin-bottom: 20px;
+  }
+  .leg-item { display: flex; align-items: center; gap: 7px; }
+  .leg-dot  { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+
+  .stats {
+    display: flex;
+    gap: 28px;
+    flex-wrap: wrap;
+    justify-content: center;
+    font-size: 0.82rem;
+    color: #8b949e;
+    margin-bottom: 28px;
+  }
+  .stat-item { text-align: center; }
+  .stat-val  { font-size: 1.05rem; color: #e6edf3; display: block; }
+
+  footer { font-size: 0.78rem; color: #484f58; text-align: center; margin-top: 8px; }
+  footer a { color: #484f58; text-decoration: none; }
+  footer a:hover { color: #8b949e; }
+
+  .stats-tables {
+    display: flex;
+    gap: 40px;
+    justify-content: center;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+  }
+  .table-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #484f58;
+    text-align: center;
+    margin-bottom: 6px;
+  }
+  .stat-table {
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    color: #8b949e;
+    min-width: 140px;
+  }
+  .stat-table th {
+    font-weight: 400;
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #484f58;
+    padding: 2px 18px 8px;
+    border-bottom: 1px solid #21262d;
+  }
+  .stat-table td {
+    padding: 4px 18px;
+    text-align: center;
+  }
+  .stat-table tfoot tr { border-top: 1px solid #21262d; }
+  .stat-table tfoot td { color: #e6edf3; padding-top: 8px; }
+  .stat-table .tbl-total td { border-top: 1px solid #21262d; color: #e6edf3; padding-top: 8px; }
+
+  .ctrl-section {
+    margin-bottom: 6px;
+  }
+  .ctrl-group-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    color: #484f58;
+    text-align: center;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Replica Exchange</h1>
+<p class="subtitle">
+  Multiple copies of a system run at different temperatures. Periodically, neighboring replicas
+  attempt to swap configurations, letting cold replicas escape energy barriers they could never
+  cross alone.
+</p>
+
+<div class="viz-grid">
+  <canvas id="landscape"></canvas>
+  <canvas id="ladder"></canvas>
+  <canvas id="occupancy"></canvas>
+  <canvas id="mixing"></canvas>
+</div>
+
+<div class="ctrl-section">
+  <div class="ctrl-group-label">Simulation</div>
+  <div class="controls">
+    <button id="btnPlay">Play</button>
+    <button id="btnRex" class="active">Swaps ON</button>
+    <button id="btnReset">Reset</button>
+    <div class="knob">
+      <div class="knob-top">
+        <label>Speed</label>
+        <input type="range" id="speed" min="1" max="12" value="5">
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ctrl-section">
+  <div class="ctrl-group-label">Initialization</div>
+  <div class="controls">
+    <div class="btn-group" style="border:none; gap:6px;">
+      <button id="initRandom" class="active">Random</button>
+      <button id="initSpaced">Evenly Spaced</button>
+      <button id="initCustom">Custom Drag-and-Drop</button>
+    </div>
+  </div>
+</div>
+
+<div class="ctrl-section">
+  <div class="ctrl-group-label">Parameters</div>
+  <div class="param-row">
+    <div class="knob">
+      <div class="knob-top">
+        <label>Replicas</label>
+        <input type="range" id="nReplicas" min="2" max="8" value="4" step="1">
+        <span class="knob-val" id="nReplicasVal">4</span>
+      </div>
+    </div>
+    <div class="knob">
+      <div class="knob-top">
+        <label>T<sub>min</sub></label>
+        <input type="range" id="tMin" min="-3" max="-0.5" value="-1.3" step="0.05">
+        <span class="knob-val" id="tMinVal">0.05</span>
+      </div>
+    </div>
+    <div class="knob">
+      <div class="knob-top">
+        <label>T<sub>max</sub></label>
+        <input type="range" id="tMax" min="0" max="1.3" value="0.15" step="0.05">
+        <span class="knob-val" id="tMaxVal">1.41</span>
+      </div>
+    </div>
+    <div class="knob">
+      <div class="knob-top">
+        <label>Barrier Height</label>
+        <input type="range" id="potDepth" min="0.1" max="4" value="1" step="0.05">
+        <span class="knob-val" id="potDepthVal">1.00</span>
+      </div>
+    </div>
+    <div class="knob">
+      <div class="knob-top">
+        <label>Energy Asymmetry</label>
+        <input type="range" id="potTilt" min="-0.8" max="0.8" value="0" step="0.05">
+        <span class="knob-val" id="potTiltVal">0.00</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="font-size:0.72rem;color:#484f58;text-align:center;margin-bottom:5px;letter-spacing:0.06em;">REPLICAS</div>
+<div class="legend" id="legend"></div>
+
+<div class="stats" style="margin-bottom:16px;">
+  <div class="stat-item"><span class="stat-val" id="statStep">0</span>MC steps</div>
+</div>
+
+<div class="stats-tables">
+  <div>
+    <div class="table-label">Exchange Rates</div>
+    <table class="stat-table">
+      <thead><tr><th>Pair</th><th>Rate</th></tr></thead>
+      <tbody id="tblPairRates"></tbody>
+    </table>
+  </div>
+  <div>
+    <div class="table-label">Round Trips</div>
+    <table class="stat-table">
+      <thead><tr><th>Replica</th><th>Steps / trip</th></tr></thead>
+      <tbody id="tblReplicaTrips"></tbody>
+      <tfoot><tr><td>Average</td><td id="tblTripsTotal">0</td></tr></tfoot>
+    </table>
+  </div>
+</div>
+
+<footer>replica.exchange &nbsp;·&nbsp; <a href="https://claude.ai" target="_blank">Built with Claude</a></footer>
+
+<script>
+// ─── Potential ────────────────────────────────────────────────────────────────
+// Fixed double-well: V(x) = depth·sin²(π(x+1.5)/3) + tilt·depth·(x/1.5)
+// Wells at x=±1.5; barrier at x=0 of height ≈ depth.
+// Tilt ∈ (-1,1) lifts one well relative to the other by ±tilt·depth.
+let potDepth = 1, potTilt = 0;
+const _W = 1.5;   // well positions at ±_W
+const _wellPos = [-_W, _W];
+
+function updatePotential() {
+  potDepth = +document.getElementById('potDepth').value;
+  potTilt  = +document.getElementById('potTilt').value;
+}
+
+const V = x =>
+  potDepth * Math.sin(Math.PI * (x + _W) / (2 * _W)) ** 2
+  + potTilt * potDepth * (x / _W);
+
+// ─── Dynamic config ───────────────────────────────────────────────────────────
+let N, TEMPS, COLORS, REPLICA_COLORS, STEP_SZ;
+const X_MIN = -2.1, X_MAX = 2.1;
+const MAX_HISTORY   = 200;
+
+function tempColor(i, n) {
+  // Blue (220°) → Cyan → Green → Orange → Red (0°)
+  const t = n === 1 ? 0.5 : i / (n - 1);
+  const h = (1 - t) * 220;
+  const s = 85, l = 58 + (1-t)*8;
+  return `hsl(${h},${s}%,${l}%)`;
+}
+
+// Categorical palette for replica identity — deliberately non-thermal so it
+// can't be confused with the blue→red temperature color scale.
+const REPLICA_PALETTE = [
+  '#f97316', // orange
+  '#a78bfa', // violet
+  '#34d399', // emerald
+  '#f472b6', // pink
+  '#facc15', // amber
+  '#22d3ee', // cyan
+  '#fb7185', // rose
+  '#86efac', // sage
+];
+
+function buildConfig() {
+  N       = +document.getElementById('nReplicas').value;
+  const tMinLog = +document.getElementById('tMin').value;
+  const tMaxLog = +document.getElementById('tMax').value;
+  const tMinV = Math.pow(10, tMinLog);
+  const tMaxV = Math.pow(10, tMaxLog);
+  TEMPS   = Array.from({length: N}, (_, i) =>
+    N === 1 ? tMinV : tMinV * Math.pow(tMaxV / tMinV, i / (N - 1)));
+  COLORS         = Array.from({length: N}, (_, i) => tempColor(i, N));  // T1…TN slot colors — thermal gradient
+  REPLICA_COLORS = Array.from({length: N}, (_, i) => REPLICA_PALETTE[i % REPLICA_PALETTE.length]); // R1…RN — categorical
+  STEP_SZ = TEMPS.map(T => 0.55 * Math.sqrt(T));
+}
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let initMode = 'random';
+let draggedReplica = null, wasDragged = false;
+
+let replicas;
+let swapAttempts = 0, swapAccepts = 0, roundTrips = 0, totalSteps = 0;
+let swapPairAttempts = [], swapPairAccepts = [];   // per adjacent pair
+let replicaRoundTrips = [];                         // per replica
+let ladderHistory = [];
+let running = false, rexOn = true;
+// Per-replica round-trip phase: 0 = heading toward Tmax, 1 = heading back to T1.
+// A round-trip completes when a replica in phase 1 touches slot 0 again.
+let replicaPhase;
+let focusedReplica = null;   // replica index (ri), or null for no focus
+
+function initState() {
+  updatePotential();
+  buildConfig();
+  const startX = initStartPositions();
+  replicas = TEMPS.map((T, i) => ({ x: startX[i], tempIdx: i }));
+  swapAttempts = swapAccepts = roundTrips = totalSteps = 0;
+  swapPairAttempts = new Array(N - 1).fill(0);
+  swapPairAccepts  = new Array(N - 1).fill(0);
+  replicaRoundTrips = new Array(N).fill(0);
+  replicaPhase = new Array(N).fill(0);
+  occHist = Array.from({length: N}, () => new Float64Array(N_BINS));
+  replicaOccHist = Array.from({length: N}, () => Array.from({length: N}, () => new Float64Array(N_BINS)));
+  replicaTempHist = Array.from({length: N}, () => new Float64Array(N));
+  ladderHistory = [];
+  recordLadder();
+  buildLegend();
+  buildReplicaTable();
+}
+
+function recordLadder() {
+  const asgn = new Array(N);
+  replicas.forEach((r, ri) => { asgn[r.tempIdx] = ri; });
+  ladderHistory.push(asgn.slice());
+  if (ladderHistory.length > MAX_HISTORY) ladderHistory.shift();
+}
+
+// ─── Simulation ───────────────────────────────────────────────────────────────
+function mcStep(r) {
+  const T  = TEMPS[r.tempIdx];
+  const xp = r.x + STEP_SZ[r.tempIdx] * (Math.random()*2 - 1);
+  if (xp <= X_MIN || xp >= X_MAX) return;  // absolute canvas boundary only
+  const dE = V(xp) - V(r.x);
+  if (dE < 0 || Math.random() < Math.exp(-dE / T)) r.x = xp;
+}
+
+function trySwap(i, j) {
+  const ri = replicas.findIndex(r => r.tempIdx === i);
+  const rj = replicas.findIndex(r => r.tempIdx === j);
+  const delta = (1/TEMPS[i] - 1/TEMPS[j]) * (V(replicas[ri].x) - V(replicas[rj].x));
+  swapAttempts++; swapPairAttempts[i]++;
+  if (delta >= 0 || Math.random() < Math.exp(delta)) {
+    swapAccepts++; swapPairAccepts[i]++;
+    replicas[ri].tempIdx = j;
+    replicas[rj].tempIdx = i;
+  }
+}
+
+function simulate(stepsPerFrame) {
+  for (let s = 0; s < stepsPerFrame; s++) {
+    replicas.forEach(mcStep);
+    totalSteps++;
+
+    if (rexOn) {
+      const k = Math.floor(Math.random() * (N - 1));
+      trySwap(k, k + 1);
+    }
+
+    // Accumulate histograms
+    replicas.forEach((r, ri) => {
+      const b = Math.floor((r.x - X_MIN) / (X_MAX - X_MIN) * N_BINS);
+      if (b >= 0 && b < N_BINS) {
+        occHist[r.tempIdx][b]++;
+        replicaOccHist[ri][r.tempIdx][b]++;
+      }
+      replicaTempHist[ri][r.tempIdx]++;
+    });
+
+    // Round-trip counting: T1 → Tmax → T1
+    replicas.forEach((r, ri) => {
+      if (replicaPhase[ri] === 0 && r.tempIdx === N - 1) {
+        replicaPhase[ri] = 1;          // touched Tmax, now head back
+      } else if (replicaPhase[ri] === 1 && r.tempIdx === 0) {
+        replicaPhase[ri] = 0;          // back at T1 — round-trip done
+        roundTrips++;
+        replicaRoundTrips[ri]++;
+      }
+    });
+  }
+}
+
+// ─── Occupancy histogram ──────────────────────────────────────────────────────
+const N_BINS = 80;
+let occHist = [];             // occHist[tempSlot][bin] = count
+let replicaOccHist = [];      // replicaOccHist[ri][tempSlot][bin] = count
+let replicaTempHist = [];     // replicaTempHist[ri][tempSlot] = count
+
+// ─── Canvas setup ─────────────────────────────────────────────────────────────
+const lcv = document.getElementById('landscape');
+const rcv = document.getElementById('ladder');
+const ocv = document.getElementById('occupancy');
+const mcv = document.getElementById('mixing');
+const lct = lcv.getContext('2d');
+const rct = rcv.getContext('2d');
+const oct = ocv.getContext('2d');
+const mct = mcv.getContext('2d');
+
+function resize() {
+  for (const cv of [lcv, rcv, ocv, mcv]) {
+    cv.width  = cv.offsetWidth  * devicePixelRatio;
+    cv.height = cv.offsetHeight * devicePixelRatio;
+  }
+}
+window.addEventListener('resize', () => { resize(); });
+resize();
+
+// ─── Draw: Landscape ──────────────────────────────────────────────────────────
+function drawLandscape() {
+  const W = lcv.width, H = lcv.height;
+  lct.clearRect(0, 0, W, H);
+
+  const PAD = { t: 30*devicePixelRatio, b: 44*devicePixelRatio,
+                l: 44*devicePixelRatio, r: 20*devicePixelRatio };
+  const pw = W - PAD.l - PAD.r, ph = H - PAD.t - PAD.b;
+  const V_MIN = -Math.abs(potTilt) * potDepth - 0.1;
+  const V_MAX =  4.5;   // fixed — matches slider max of 4
+
+  const cx = x => PAD.l + (x - X_MIN) / (X_MAX - X_MIN) * pw;
+  const cy = v => PAD.t + (1 - (v - V_MIN) / (V_MAX - V_MIN)) * ph;
+
+  // Potential fill
+  lct.beginPath();
+  for (let i = 0; i <= 300; i++) {
+    const x = X_MIN + i/300*(X_MAX-X_MIN);
+    const y = cy(Math.min(V(x), V_MAX));
+    i === 0 ? lct.moveTo(cx(x), y) : lct.lineTo(cx(x), y);
+  }
+  lct.lineTo(cx(X_MAX), H-PAD.b); lct.lineTo(cx(X_MIN), H-PAD.b); lct.closePath();
+  lct.fillStyle = 'rgba(48,54,61,0.25)'; lct.fill();
+
+  // Potential curve
+  lct.beginPath();
+  lct.strokeStyle = '#4a5568'; lct.lineWidth = 1.8*devicePixelRatio;
+  for (let i = 0; i <= 300; i++) {
+    const x = X_MIN + i/300*(X_MAX-X_MIN);
+    i === 0 ? lct.moveTo(cx(x), cy(V(x))) : lct.lineTo(cx(x), cy(V(x)));
+  }
+  lct.stroke();
+
+  // Axis labels
+  lct.fillStyle = '#484f58'; lct.font = `${11*devicePixelRatio}px sans-serif`;
+  lct.textAlign = 'center';
+  lct.fillText('position  x', W/2, H - 6*devicePixelRatio);
+  lct.save(); lct.translate(13*devicePixelRatio, H/2); lct.rotate(-Math.PI/2);
+  lct.fillText('energy  V(x)', 0, 0); lct.restore();
+
+  _wellPos.forEach(xi => {
+    lct.fillStyle = '#484f58'; lct.textAlign = 'center';
+    lct.fillText(xi.toFixed(xi === 0 ? 0 : 1), cx(xi), H - PAD.b + 14*devicePixelRatio);
+    lct.beginPath(); lct.strokeStyle = '#30363d'; lct.lineWidth = devicePixelRatio;
+    lct.moveTo(cx(xi), H-PAD.b); lct.lineTo(cx(xi), H-PAD.b+4*devicePixelRatio); lct.stroke();
+  });
+
+  // Replicas — hottest drawn first (underneath), focused last (on top)
+  const sorted = [...replicas.entries()]
+    .sort((a,b) => b[1].tempIdx - a[1].tempIdx || (a[0]===focusedReplica?1:-1));
+  sorted.forEach(([ri, r]) => {
+    const rx = cx(r.x), ry = cy(V(r.x));
+    const isFocused = focusedReplica === null || focusedReplica === ri;
+    const rad = 7 * devicePixelRatio * (focusedReplica===ri ? 1.4 : 1);
+    lct.beginPath(); lct.arc(rx, ry, rad, 0, Math.PI*2);
+    lct.fillStyle = REPLICA_COLORS[ri];
+    lct.globalAlpha = isFocused ? 0.92 : 0.18;
+    lct.fill();
+    lct.globalAlpha = isFocused ? 1 : 0.25;
+    lct.strokeStyle = focusedReplica===ri ? '#ffffff' : '#0d1117';
+    lct.lineWidth = (focusedReplica===ri ? 2 : 1.5)*devicePixelRatio;
+    lct.stroke();
+    lct.globalAlpha = 1;
+  });
+
+  lct.fillStyle = '#484f58'; lct.font = `${10*devicePixelRatio}px sans-serif`;
+  lct.textAlign = 'left'; lct.fillText('ENERGY LANDSCAPE', PAD.l, 18*devicePixelRatio);
+}
+
+// ─── Draw: Ladder ─────────────────────────────────────────────────────────────
+function drawLadder() {
+  const W = rcv.width, H = rcv.height;
+  rct.clearRect(0, 0, W, H);
+
+  const PAD = { t: 30*devicePixelRatio, b: 28*devicePixelRatio,
+                l: 20*devicePixelRatio, r: 86*devicePixelRatio };
+  const pw = W - PAD.l - PAD.r, ph = H - PAD.t - PAD.b;
+
+  const hist = ladderHistory;
+  const toY = slot => PAD.t + (1 - slot/(N-1)) * ph;
+  const toX = i    => PAD.l + (i / Math.max(hist.length - 1, 1)) * pw;
+
+  // Grid lines + labels — always drawn
+  for (let t = 0; t < N; t++) {
+    const y = toY(t);
+    rct.beginPath(); rct.strokeStyle = '#21262d'; rct.lineWidth = devicePixelRatio;
+    rct.setLineDash([4*devicePixelRatio, 4*devicePixelRatio]);
+    rct.moveTo(PAD.l, y); rct.lineTo(W-PAD.r, y); rct.stroke();
+    rct.setLineDash([]);
+
+    rct.fillStyle = COLORS[t]; rct.font = `${10*devicePixelRatio}px sans-serif`;
+    rct.textAlign = 'left';
+    rct.fillText(`T${t+1} = ${fmt(TEMPS[t])}`, W-PAD.r+6*devicePixelRatio, y+4*devicePixelRatio);
+  }
+
+  rct.fillStyle = '#484f58'; rct.font = `${10*devicePixelRatio}px sans-serif`;
+  rct.textAlign = 'left';
+  rct.fillText('TEMPERATURE HISTORY', PAD.l, 18*devicePixelRatio);
+
+  if (hist.length < 2) return;
+
+  // Draw dimmed replicas first, focused on top
+  const drawOrder = focusedReplica === null
+    ? Array.from({length: N}, (_, i) => i)
+    : [...Array.from({length: N}, (_, i) => i).filter(i => i !== focusedReplica), focusedReplica];
+
+  for (const ri of drawOrder) {
+    const isFocused = focusedReplica === null || focusedReplica === ri;
+    const baseWidth = Math.max(1.5, 3.5 - N*0.25);
+    for (let i = 1; i < hist.length; i++) {
+      let slotPrev = -1, slotCurr = -1;
+      for (let s = 0; s < N; s++) {
+        if (hist[i-1][s] === ri) slotPrev = s;
+        if (hist[i  ][s] === ri) slotCurr = s;
+      }
+      if (slotPrev < 0 || slotCurr < 0) continue;
+
+      rct.beginPath();
+      rct.moveTo(toX(i-1), toY(slotPrev));
+      rct.lineTo(toX(i),   toY(slotCurr));
+      rct.strokeStyle = REPLICA_COLORS[ri];
+      rct.lineWidth = (isFocused ? baseWidth * 2 : baseWidth) * devicePixelRatio;
+      rct.globalAlpha = isFocused ? 0.9 : 0.12;
+      rct.stroke();
+      rct.globalAlpha = 1;
+    }
+  }
+
+  rct.fillStyle = '#484f58'; rct.font = `${10*devicePixelRatio}px sans-serif`;
+  rct.textAlign = 'center';
+  rct.fillText('← time', PAD.l+pw/2, H-6*devicePixelRatio);
+}
+
+// ─── Draw: Occupancy ──────────────────────────────────────────────────────────
+function drawOccupancy() {
+  const W = ocv.width, H = ocv.height;
+  oct.clearRect(0, 0, W, H);
+
+  const PAD = { t: 24*devicePixelRatio, b: 36*devicePixelRatio,
+                l: 44*devicePixelRatio, r: 20*devicePixelRatio };
+  const pw = W - PAD.l - PAD.r, ph = H - PAD.t - PAD.b;
+
+  const cx = x => PAD.l + (x - X_MIN) / (X_MAX - X_MIN) * pw;
+
+  // When a replica is focused, show only that replica's per-temperature samples.
+  // Temperatures that replica hasn't visited yet are skipped entirely.
+  const src = focusedReplica !== null ? replicaOccHist[focusedReplica] : occHist;
+  const hPdf = Array.from({length: N}, (_, t) => {
+    const total = src[t].reduce((s, v) => s + v, 0);
+    return total === 0
+      ? null   // null = not visited; skip drawing
+      : Float64Array.from(src[t], v => v / total);
+  });
+  let gMax = 0;
+  for (let t = 0; t < N; t++)
+    if (hPdf[t]) for (let b = 0; b < N_BINS; b++)
+      if (hPdf[t][b] > gMax) gMax = hPdf[t][b];
+
+  // Draw each temperature slot, coldest last (on top); skip unvisited slots
+  for (let t = N - 1; t >= 0; t--) {
+    if (!hPdf[t]) continue;
+    const pts = Array.from({length: N_BINS}, (_, b) => {
+      const x = X_MIN + (b + 0.5) / N_BINS * (X_MAX - X_MIN);
+      const y = PAD.t + ph * (1 - (gMax > 0 ? hPdf[t][b] / gMax : 0));
+      return [cx(x), y];
+    });
+
+    oct.beginPath();
+    oct.moveTo(pts[0][0], PAD.t + ph);
+    pts.forEach(([px, py]) => oct.lineTo(px, py));
+    oct.lineTo(pts[N_BINS - 1][0], PAD.t + ph);
+    oct.closePath();
+    oct.fillStyle = COLORS[t];
+    oct.globalAlpha = 0.18;
+    oct.fill();
+
+    oct.beginPath();
+    pts.forEach(([px, py], i) => i === 0 ? oct.moveTo(px, py) : oct.lineTo(px, py));
+    oct.strokeStyle = COLORS[t];
+    oct.lineWidth = 1.5 * devicePixelRatio;
+    oct.globalAlpha = 0.9;
+    oct.stroke();
+    oct.globalAlpha = 1;
+  }
+
+  // Theoretical Boltzmann PDF: exp(−V(x)/T) / Z(T), same normalisation as histogram
+  const theory = Array.from({length: N}, (_, t) => {
+    const raw = Array.from({length: N_BINS}, (_, b) => {
+      const x = X_MIN + (b + 0.5) / N_BINS * (X_MAX - X_MIN);
+      return Math.exp(-V(x) / TEMPS[t]);
+    });
+    const Z = raw.reduce((s, v) => s + v, 0);
+    return raw.map(v => v / Z);
+  });
+  let tGMax = 0;
+  for (let t = 0; t < N; t++)
+    for (let b = 0; b < N_BINS; b++)
+      if (theory[t][b] > tGMax) tGMax = theory[t][b];
+
+  if (tGMax > 0) {
+    for (let t = N - 1; t >= 0; t--) {
+      oct.beginPath();
+      theory[t].forEach((p, b) => {
+        const x = X_MIN + (b + 0.5) / N_BINS * (X_MAX - X_MIN);
+        const py = PAD.t + ph * (1 - p / tGMax);
+        b === 0 ? oct.moveTo(cx(x), py) : oct.lineTo(cx(x), py);
+      });
+      oct.strokeStyle = COLORS[t];
+      oct.lineWidth = 1.5 * devicePixelRatio;
+      oct.setLineDash([5 * devicePixelRatio, 4 * devicePixelRatio]);
+      oct.globalAlpha = 0.55;
+      oct.stroke();
+      oct.setLineDash([]);
+      oct.globalAlpha = 1;
+    }
+  }
+
+  // Well and barrier guide lines
+  [-_W, 0, _W].forEach(xi => {
+    oct.beginPath();
+    oct.strokeStyle = xi === 0 ? '#3a4250' : '#2d333b';
+    oct.lineWidth = devicePixelRatio;
+    oct.setLineDash([3*devicePixelRatio, 3*devicePixelRatio]);
+    oct.moveTo(cx(xi), PAD.t); oct.lineTo(cx(xi), PAD.t + ph);
+    oct.stroke(); oct.setLineDash([]);
+  });
+
+  // X-axis tick labels
+  oct.fillStyle = '#484f58';
+  oct.font = `${10*devicePixelRatio}px sans-serif`;
+  oct.textAlign = 'center';
+  [-_W, 0, _W].forEach(xi =>
+    oct.fillText(xi === 0 ? '0' : xi.toFixed(1), cx(xi), PAD.t + ph + 14*devicePixelRatio));
+  oct.fillText('position  x', W / 2, H - 4*devicePixelRatio);
+
+  // Y-axis label
+  oct.save();
+  oct.translate(13*devicePixelRatio, PAD.t + ph/2);
+  oct.rotate(-Math.PI / 2);
+  oct.fillText('occupancy', 0, 0);
+  oct.restore();
+
+  // Panel title — tinted when a replica is focused
+  oct.fillStyle = focusedReplica !== null ? REPLICA_COLORS[focusedReplica] : '#484f58';
+  oct.globalAlpha = focusedReplica !== null ? 0.7 : 1;
+  oct.textAlign = 'left';
+  oct.fillText(
+    focusedReplica !== null
+      ? `TEMPERATURE OCCUPANCY — R${focusedReplica + 1}`
+      : 'TEMPERATURE OCCUPANCY',
+    PAD.l, 15*devicePixelRatio);
+  oct.globalAlpha = 1;
+
+  // Colored border when filtered by a focused replica
+  if (focusedReplica !== null) {
+    oct.strokeStyle = REPLICA_COLORS[focusedReplica];
+    oct.lineWidth = 2 * devicePixelRatio;
+    oct.globalAlpha = 0.5;
+    oct.strokeRect(1*devicePixelRatio, 1*devicePixelRatio,
+                   W - 2*devicePixelRatio, H - 2*devicePixelRatio);
+    oct.globalAlpha = 1;
+  }
+}
+
+// ─── Draw: Mixing ─────────────────────────────────────────────────────────────
+function drawMixing() {
+  const W = mcv.width, H = mcv.height;
+  mct.clearRect(0, 0, W, H);
+
+  const PAD = { t: 24*devicePixelRatio, b: 36*devicePixelRatio,
+                l: 44*devicePixelRatio, r: 20*devicePixelRatio };
+  const pw = W - PAD.l - PAD.r, ph = H - PAD.t - PAD.b;
+
+  const barW   = pw / N * 0.7;
+  const barGap = pw / N;
+  const barX   = ri => PAD.l + ri * barGap + (barGap - barW) / 2;
+
+  // Stacked bars — each replica's time fraction at each temperature slot
+  for (let ri = 0; ri < N; ri++) {
+    const total = replicaTempHist[ri].reduce((s, v) => s + v, 0);
+    if (total === 0) continue;   // no data yet — leave bar empty
+    let yBase = PAD.t + ph;  // draw upward from bottom
+
+    for (let t = 0; t < N; t++) {
+      const frac = replicaTempHist[ri][t] / total;
+      const segH = frac * ph;
+      const isFocused = focusedReplica === null || focusedReplica === ri;
+      mct.fillStyle = COLORS[t];
+      mct.globalAlpha = isFocused ? 0.85 : 0.15;
+      mct.fillRect(barX(ri), yBase - segH, barW, segH);
+      mct.globalAlpha = 1;
+      yBase -= segH;
+    }
+  }
+
+  // X-axis replica labels
+  mct.font = `${10*devicePixelRatio}px sans-serif`;
+  mct.textAlign = 'center';
+  for (let ri = 0; ri < N; ri++) {
+    const x = barX(ri) + barW / 2;
+    // Colored dot
+    mct.beginPath();
+    mct.arc(x, PAD.t + ph + 10*devicePixelRatio, 4*devicePixelRatio, 0, Math.PI*2);
+    mct.fillStyle = REPLICA_COLORS[ri];
+    mct.globalAlpha = focusedReplica === null || focusedReplica === ri ? 1 : 0.2;
+    mct.fill();
+    mct.globalAlpha = 1;
+    mct.fillStyle = '#484f58';
+    mct.fillText(`R${ri+1}`, x, PAD.t + ph + 26*devicePixelRatio);
+  }
+
+  // Y-axis labels (0 and 1 only)
+  mct.textAlign = 'right';
+  mct.fillStyle = '#484f58';
+  [[0, 1], [1, 0]].forEach(([frac, label]) => {
+    const y = PAD.t + ph * frac;
+    mct.fillText(label, PAD.l - 5*devicePixelRatio, y + 3*devicePixelRatio);
+    mct.beginPath();
+    mct.strokeStyle = '#21262d';
+    mct.lineWidth = devicePixelRatio;
+    mct.moveTo(PAD.l, y); mct.lineTo(PAD.l + pw, y);
+    mct.stroke();
+  });
+
+  // Y-axis label
+  mct.save();
+  mct.translate(13*devicePixelRatio, PAD.t + ph/2);
+  mct.rotate(-Math.PI/2);
+  mct.textAlign = 'center';
+  mct.fillText('fraction of time', 0, 0);
+  mct.restore();
+
+  // Panel title
+  mct.fillStyle = '#484f58';
+  mct.textAlign = 'left';
+  mct.font = `${10*devicePixelRatio}px sans-serif`;
+  mct.fillText('REPLICA TEMPERATURE MIXING', PAD.l, 15*devicePixelRatio);
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function fmt(v) {
+  return v < 0.1 ? v.toFixed(3) : v < 1 ? v.toFixed(2) : v.toFixed(1);
+}
+
+// ─── Legend ───────────────────────────────────────────────────────────────────
+function buildReplicaTable() {
+  document.getElementById('tblReplicaTrips').innerHTML = Array.from({length: N}, (_, ri) =>
+    `<tr data-ri="${ri}" style="cursor:pointer"><td><span style="color:${REPLICA_COLORS[ri]}">R${ri+1}</span></td>` +
+    `<td class="trip-count">—</td></tr>`
+  ).join('');
+}
+
+function fmtSteps(n) {
+  if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1) + 'k';
+  return Math.round(n).toString();
+}
+
+function buildLegend() {
+  const el = document.getElementById('legend');
+  el.innerHTML = '';
+  TEMPS.forEach((T, i) => {
+    const item = document.createElement('div'); item.className = 'leg-item';
+    item.style.cursor = 'pointer';
+    item.style.userSelect = 'none';
+    const dot  = document.createElement('div'); dot.className  = 'leg-dot';
+    dot.style.background = REPLICA_COLORS[i];
+    item.appendChild(dot);
+    item.appendChild(document.createTextNode(`R${i+1}`));
+    item.addEventListener('click', () => {
+      focusedReplica = (focusedReplica === i) ? null : i;
+      updateLegendFocus();
+    });
+    el.appendChild(item);
+  });
+  updateLegendFocus();
+}
+
+function updateLegendFocus() {
+  document.querySelectorAll('#legend .leg-item').forEach((item, i) => {
+    item.style.opacity = (focusedReplica === null || focusedReplica === i) ? '1' : '0.25';
+  });
+}
+
+// ─── Stats ────────────────────────────────────────────────────────────────────
+function updateStats() {
+  document.getElementById('statStep').textContent = totalSteps.toLocaleString();
+
+  const overallRate = swapAttempts > 0 ? (swapAccepts/swapAttempts*100).toFixed(1)+'%' : '—';
+  document.getElementById('tblPairRates').innerHTML =
+    swapPairAttempts.map((att, k) =>
+      `<tr><td>T${k+1} ↔ T${k+2}</td><td>${att > 0 ? (swapPairAccepts[k]/att*100).toFixed(1)+'%' : '—'}</td></tr>`
+    ).join('') +
+    `<tr class="tbl-total"><td>Average</td><td>${overallRate}</td></tr>`;
+
+  document.querySelectorAll('#tblReplicaTrips tr').forEach((row, ri) => {
+    row.style.opacity = focusedReplica === null || focusedReplica === ri ? 1 : 0.25;
+    const n = replicaRoundTrips[ri];
+    row.querySelector('.trip-count').textContent = n > 0 ? fmtSteps(totalSteps / n) : '—';
+  });
+  const tripsWithData = replicaRoundTrips.filter(n => n > 0);
+  document.getElementById('tblTripsTotal').textContent =
+    tripsWithData.length > 0
+      ? fmtSteps(tripsWithData.reduce((s, n) => s + totalSteps / n, 0) / tripsWithData.length)
+      : '—';
+}
+
+// ─── Param display sync ───────────────────────────────────────────────────────
+function syncParamDisplay() {
+  document.getElementById('nReplicasVal').textContent = document.getElementById('nReplicas').value;
+  const tMinLog = +document.getElementById('tMin').value;
+  const tMaxLog = +document.getElementById('tMax').value;
+  document.getElementById('tMinVal').textContent = fmt(Math.pow(10, tMinLog));
+  document.getElementById('tMaxVal').textContent = fmt(Math.pow(10, tMaxLog));
+  updatePotential();
+  document.getElementById('potDepthVal').textContent = potDepth.toFixed(2);
+  document.getElementById('potTiltVal').textContent  = potTilt.toFixed(2);
+}
+
+['nReplicas','tMin','tMax'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => { focusedReplica = null; syncParamDisplay(); initState(); updateLegendFocus(); });
+});
+
+// Potential sliders update live without resetting the simulation
+['potDepth','potTilt'].forEach(id => {
+  document.getElementById(id).addEventListener('input', syncParamDisplay);
+});
+
+// ─── Animation loop ───────────────────────────────────────────────────────────
+// Map slider 1–12 to steps/frame on a log scale: ~0.2 at min, ~60 at max
+let stepAccum = 0;
+function stepsPerFrame(spd) { return Math.pow(10, (spd - 1) / 11 * 3.6 - 1.8); }
+
+function frame() {
+  if (running) {
+    const spd = +document.getElementById('speed').value;
+    stepAccum += stepsPerFrame(spd);
+    const steps = Math.floor(stepAccum);
+    stepAccum -= steps;
+    if (steps > 0) simulate(steps);
+    recordLadder();
+  }
+  drawLandscape();
+  drawLadder();
+  drawOccupancy();
+  drawMixing();
+  updateStats();
+  requestAnimationFrame(frame);
+}
+
+// ─── Init-mode helpers ────────────────────────────────────────────────────────
+function initStartPositions() {
+  if (initMode === 'random') {
+    return Array.from({length: N}, () => X_MIN + Math.random() * (X_MAX - X_MIN));
+  }
+  // 'spaced' and 'custom' both start linearly spaced; custom lets user drag from there
+  return Array.from({length: N}, (_, i) =>
+    N === 1 ? 0 : -_W + 2 * _W * i / (N - 1));
+}
+
+// Shared landscape hit-test — returns canvas px coords + world-space helpers
+function getLcvHitInfo(clientX, clientY) {
+  const rect = lcv.getBoundingClientRect();
+  const sx = lcv.width / rect.width, sy = lcv.height / rect.height;
+  const mx = (clientX - rect.left) * sx;
+  const my = (clientY - rect.top)  * sy;
+  const dpr = devicePixelRatio;
+  const padL = 44*dpr, padR = 20*dpr, padT = 30*dpr, padB = 44*dpr;
+  const pw = lcv.width  - padL - padR;
+  const ph = lcv.height - padT - padB;
+  const V_MIN = -Math.abs(potTilt) * potDepth - 0.1, V_MAX = 4.5;
+  const cx = x => padL + (x - X_MIN) / (X_MAX - X_MIN) * pw;
+  const cy = v => padT + (1 - (v - V_MIN) / (V_MAX - V_MIN)) * ph;
+  const xFromPx = px => X_MIN + (px - padL) / pw * (X_MAX - X_MIN);
+  return { mx, my, cx, cy, xFromPx };
+}
+
+// ─── Custom-mode drag ─────────────────────────────────────────────────────────
+lcv.addEventListener('mousedown', e => {
+  if (initMode !== 'custom') return;
+  const { mx, my, cx, cy } = getLcvHitInfo(e.clientX, e.clientY);
+  let closest = null, bestDist = Infinity;
+  replicas.forEach((r, ri) => {
+    const dx = cx(r.x) - mx, dy = cy(V(r.x)) - my;
+    const d = Math.sqrt(dx*dx + dy*dy);
+    if (d < bestDist) { bestDist = d; closest = ri; }
+  });
+  if (bestDist < 20 * devicePixelRatio) {
+    draggedReplica = closest;
+    wasDragged = false;
+    e.preventDefault();
+  }
+});
+
+window.addEventListener('mousemove', e => {
+  if (draggedReplica === null) return;
+  wasDragged = true;
+  const { xFromPx, mx: _ } = getLcvHitInfo(e.clientX, e.clientY);
+  const rect = lcv.getBoundingClientRect();
+  const px = (e.clientX - rect.left) * (lcv.width / rect.width);
+  replicas[draggedReplica].x = Math.max(X_MIN + 0.01, Math.min(X_MAX - 0.01, xFromPx(px)));
+});
+
+window.addEventListener('mouseup', () => { draggedReplica = null; });
+
+// Cursor: grab when hovering a dot in custom mode
+lcv.addEventListener('mousemove', e => {
+  if (initMode !== 'custom') { lcv.style.cursor = 'pointer'; return; }
+  if (draggedReplica !== null) { lcv.style.cursor = 'grabbing'; return; }
+  const { mx, my, cx, cy } = getLcvHitInfo(e.clientX, e.clientY);
+  let minDist = Infinity;
+  replicas.forEach(r => {
+    const dx = cx(r.x) - mx, dy = cy(V(r.x)) - my;
+    minDist = Math.min(minDist, Math.sqrt(dx*dx + dy*dy));
+  });
+  lcv.style.cursor = minDist < 20 * devicePixelRatio ? 'grab' : 'default';
+});
+
+// ─── Controls ─────────────────────────────────────────────────────────────────
+document.getElementById('btnPlay').addEventListener('click', function() {
+  running = !running;
+  this.textContent = running ? 'Pause' : 'Play';
+  this.classList.toggle('active', running);
+});
+document.getElementById('btnRex').addEventListener('click', function() {
+  rexOn = !rexOn;
+  this.textContent = rexOn ? 'Swaps ON' : 'Swaps OFF';
+  this.classList.toggle('active', rexOn);
+});
+document.getElementById('btnReset').addEventListener('click', () => { focusedReplica = null; initState(); updateLegendFocus(); });
+
+// Clicking anywhere outside an interactive element clears replica selection
+document.addEventListener('click', e => {
+  if (e.target.closest('button, canvas, [data-ri], .leg-item, input, label')) return;
+  if (focusedReplica === null) return;
+  focusedReplica = null;
+  updateLegendFocus();
+});
+
+document.getElementById('tblReplicaTrips').addEventListener('click', e => {
+  const row = e.target.closest('tr[data-ri]');
+  if (!row) return;
+  const ri = +row.dataset.ri;
+  focusedReplica = focusedReplica === ri ? null : ri;
+  updateLegendFocus();
+});
+
+['initRandom','initSpaced','initCustom'].forEach(id => {
+  document.getElementById(id).addEventListener('click', () => {
+    initMode = { initRandom:'random', initSpaced:'spaced', initCustom:'custom' }[id];
+    document.getElementById('initRandom').classList.toggle('active', initMode === 'random');
+    document.getElementById('initSpaced').classList.toggle('active', initMode === 'spaced');
+    document.getElementById('initCustom').classList.toggle('active', initMode === 'custom');
+    if (initMode !== 'custom') initState();   // custom: keep current positions, just enable dragging
+  });
+});
+
+// Click on ladder to focus/unfocus a replica
+rcv.addEventListener('click', e => {
+  const rect = rcv.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (rcv.width / rect.width);
+  const my = (e.clientY - rect.top)  * (rcv.height / rect.height);
+  const dpr = devicePixelRatio;
+  const padL = 20*dpr, padR = 86*dpr, padT = 30*dpr, padB = 28*dpr;
+  const pw = rcv.width - padL - padR, ph = rcv.height - padT - padB;
+  const hist = ladderHistory;
+  if (hist.length < 2) return;
+  const ti = Math.max(0, Math.min(hist.length - 1,
+    Math.round((mx - padL) / pw * (hist.length - 1))));
+  let closest = null, bestDist = Infinity;
+  for (let ri = 0; ri < N; ri++) {
+    let slot = -1;
+    for (let s = 0; s < N; s++) if (hist[ti][s] === ri) { slot = s; break; }
+    if (slot < 0) continue;
+    const ly = padT + (1 - slot / (N - 1)) * ph;
+    const d = Math.abs(ly - my);
+    if (d < bestDist) { bestDist = d; closest = ri; }
+  }
+  focusedReplica = (focusedReplica !== closest) ? closest : null;
+  updateLegendFocus();
+});
+
+// Click on mixing bars to focus/unfocus a replica
+mcv.addEventListener('click', e => {
+  const rect = mcv.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (mcv.width / rect.width);
+  const dpr = devicePixelRatio;
+  const padL = 44*dpr, padR = 20*dpr;
+  const pw = mcv.width - padL - padR;
+  const barGap = pw / N;
+  let closest = null, bestDist = Infinity;
+  for (let ri = 0; ri < N; ri++) {
+    const cx = padL + ri * barGap + barGap / 2;
+    const d = Math.abs(cx - mx);
+    if (d < bestDist) { bestDist = d; closest = ri; }
+  }
+  focusedReplica = (bestDist < barGap / 2 && focusedReplica !== closest) ? closest : null;
+  updateLegendFocus();
+});
+
+// Click on landscape to focus/unfocus a replica
+lcv.addEventListener('click', e => {
+  if (wasDragged) { wasDragged = false; return; }   // was a drag in custom mode — don't re-interpret as click
+  const { mx, my, cx, cy } = getLcvHitInfo(e.clientX, e.clientY);
+  let closest = null, bestDist = Infinity;
+  replicas.forEach((r, ri) => {
+    const dx = cx(r.x) - mx, dy = cy(V(r.x)) - my;
+    const d = Math.sqrt(dx*dx + dy*dy);
+    if (d < bestDist) { bestDist = d; closest = ri; }
+  });
+  const hitRadius = 18 * devicePixelRatio;
+  focusedReplica = (bestDist < hitRadius && focusedReplica !== closest) ? closest : null;
+  updateLegendFocus();
+});
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+updatePotential();
+syncParamDisplay();
+initState();
+frame();
+</script>
+</body>
+</html>
