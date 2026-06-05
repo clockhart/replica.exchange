@@ -29,11 +29,13 @@
   .subtitle {
     font-size: 0.95rem;
     color: #8b949e;
-    margin-bottom: 36px;
+    margin-bottom: 28px;
     text-align: center;
-    max-width: 560px;
-    line-height: 1.6;
+    max-width: 640px;
+    line-height: 1.7;
   }
+  .subtitle p { margin-bottom: 0.7em; }
+  .subtitle p:last-child { margin-bottom: 0; }
 
   .viz-grid {
     display: grid;
@@ -205,6 +207,41 @@
   .ctrl-section {
     margin-bottom: 6px;
   }
+  #tempSchedSection {
+    width: 100%;
+    max-width: 960px;
+  }
+  #tempLineWrap {
+    margin: 0 auto;
+    position: relative;
+  }
+  .temp-edge-handle {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 12px;
+    cursor: ew-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+  }
+  .temp-edge-handle::after {
+    content: '';
+    display: block;
+    width: 3px;
+    height: 20px;
+    border-radius: 2px;
+    background: #30363d;
+  }
+  .temp-edge-handle:hover::after { background: #8b949e; }
+  #tempHandleLeft  { left:  -14px; }
+  #tempHandleRight { right: -14px; }
+  #tempLine {
+    display: block;
+    width: 100%;
+    height: 48px;
+    margin-top: 6px;
+  }
   .ctrl-group-label {
     font-size: 0.68rem;
     letter-spacing: 0.08em;
@@ -214,15 +251,28 @@
     margin-bottom: 4px;
   }
 </style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
 </head>
 <body>
 
 <h1>Replica Exchange</h1>
-<p class="subtitle">
-  Multiple copies of a system run at different temperatures. Periodically, neighboring replicas
-  attempt to swap configurations, letting cold replicas escape energy barriers they could never
-  cross alone.
-</p>
+<div class="subtitle">
+  <p>
+    Each replica samples \(V(x)\) using Metropolis-Hastings: at every step a new position
+    \(x' = x + \mathcal{U}(-s,\, s)\) is proposed, where \(s = 0.55\sqrt{T}\),
+    and accepted with probability \(\min\!\left(1,\, e^{-\Delta V/T}\right)\),
+    where \(\Delta V = V(x') - V(x)\).
+  </p>
+  <p>
+    Periodically, neighboring replicas attempt to swap temperatures, in itself a Metropolis step,
+    accepted with probability \(\min\!\left(1,\, e^{\,\delta}\right)\) where
+    \(\delta = \left(\tfrac{1}{T_i} - \tfrac{1}{T_j}\right)(V_i - V_j)\),
+    so detailed balance is preserved at every level.
+  </p>
+</div>
+
 
 <div class="viz-grid">
   <canvas id="landscape"></canvas>
@@ -250,9 +300,8 @@
   <div class="ctrl-group-label">Initialization</div>
   <div class="controls">
     <div class="btn-group" style="border:none; gap:6px;">
-      <button id="initRandom" class="active">Random</button>
-      <button id="initSpaced">Evenly Spaced</button>
-      <button id="initCustom">Custom Drag-and-Drop</button>
+      <button id="btnMoveReplicas">Move Replicas</button>
+      <button id="btnPotEdit">Edit Barrier / Well Depths</button>
     </div>
   </div>
 </div>
@@ -263,43 +312,54 @@
     <div class="knob">
       <div class="knob-top">
         <label>Replicas</label>
-        <input type="range" id="nReplicas" min="2" max="8" value="4" step="1">
+        <input type="range" id="nReplicas" min="2" max="8" value="2" step="1">
         <span class="knob-val" id="nReplicasVal">4</span>
       </div>
     </div>
     <div class="knob">
       <div class="knob-top">
         <label>T<sub>min</sub></label>
-        <input type="range" id="tMin" min="-3" max="-0.5" value="-1.3" step="0.05">
+        <input type="range" id="tMin" min="-7" max="0" value="-1.47" step="0.05">
         <span class="knob-val" id="tMinVal">0.05</span>
       </div>
     </div>
     <div class="knob">
       <div class="knob-top">
         <label>T<sub>max</sub></label>
-        <input type="range" id="tMax" min="0" max="1.3" value="0.15" step="0.05">
+        <input type="range" id="tMax" min="0" max="7" value="0" step="0.05">
         <span class="knob-val" id="tMaxVal">1.41</span>
       </div>
     </div>
     <div class="knob">
       <div class="knob-top">
-        <label>Barrier Height</label>
-        <input type="range" id="potDepth" min="0.1" max="4" value="1" step="0.05">
-        <span class="knob-val" id="potDepthVal">1.00</span>
-      </div>
-    </div>
-    <div class="knob">
-      <div class="knob-top">
-        <label>Energy Asymmetry</label>
-        <input type="range" id="potTilt" min="-0.8" max="0.8" value="0" step="0.05">
-        <span class="knob-val" id="potTiltVal">0.00</span>
+        <label>Step size</label>
+        <input type="range" id="stepAlpha" min="0.05" max="2.0" value="0.55" step="0.05">
+        <span class="knob-val" id="stepAlphaVal">0.55</span>
       </div>
     </div>
   </div>
 </div>
 
-<div style="font-size:0.72rem;color:#484f58;text-align:center;margin-bottom:5px;letter-spacing:0.06em;">REPLICAS</div>
-<div class="legend" id="legend"></div>
+<div class="ctrl-section" id="tempSchedSection">
+  <div class="ctrl-group-label">Temperature Schedule</div>
+  <div class="controls" style="justify-content:center;">
+    <div style="display:flex;align-items:center;gap:6px;">
+      <span style="font-size:0.75rem;color:#8b949e;">Scale</span>
+      <div class="btn-group" style="border:none; gap:6px;">
+        <button id="tempAxisLinear" class="active">Linear</button>
+        <button id="tempAxisLog">Log</button>
+      </div>
+    </div>
+  </div>
+  <div id="tempLineWrap">
+    <div class="temp-edge-handle" id="tempHandleLeft"></div>
+    <div class="temp-edge-handle" id="tempHandleRight"></div>
+    <canvas id="tempLine"></canvas>
+    <div id="tempTooltip" style="display:none;position:absolute;pointer-events:none;
+      background:#161b22;border:1px solid #30363d;border-radius:4px;
+      padding:3px 7px;font-size:0.75rem;color:#e6edf3;white-space:nowrap;z-index:10;"></div>
+  </div>
+</div>
 
 <div class="stats" style="margin-bottom:16px;">
   <div class="stat-item"><span class="stat-val" id="statStep">0</span>MC steps</div>
@@ -309,39 +369,41 @@
   <div>
     <div class="table-label">Exchange Rates</div>
     <table class="stat-table">
-      <thead><tr><th>Pair</th><th>Rate</th></tr></thead>
+      <thead><tr><th>Pair</th><th>Observed</th><th>Expected</th></tr></thead>
       <tbody id="tblPairRates"></tbody>
     </table>
   </div>
   <div>
     <div class="table-label">Round Trips</div>
     <table class="stat-table">
-      <thead><tr><th>Replica</th><th>Steps / trip</th></tr></thead>
+      <thead><tr><th>Replica</th><th>Trips</th><th>Steps / trip</th></tr></thead>
       <tbody id="tblReplicaTrips"></tbody>
-      <tfoot><tr><td>Average</td><td id="tblTripsTotal">0</td></tr></tfoot>
+      <tfoot><tr><td>Average</td><td id="tblTripsTotalN">—</td><td id="tblTripsTotal">—</td></tr></tfoot>
     </table>
   </div>
 </div>
+
 
 <footer>replica.exchange &nbsp;·&nbsp; <a href="https://claude.ai" target="_blank">Built with Claude</a></footer>
 
 <script>
 // ─── Potential ────────────────────────────────────────────────────────────────
-// Fixed double-well: V(x) = depth·sin²(π(x+1.5)/3) + tilt·depth·(x/1.5)
-// Wells at x=±1.5; barrier at x=0 of height ≈ depth.
-// Tilt ∈ (-1,1) lifts one well relative to the other by ±tilt·depth.
-let potDepth = 1, potTilt = 0;
-const _W = 1.5;   // well positions at ±_W
+// Piecewise quadratic double-well, C¹ everywhere.
+// Three anchors: V(-1.5)=potLeft, V(0)=potBarrier, V(1.5)=potRight.
+// κ_L=(potBarrier-potLeft)/1.125, κ_R=(potBarrier-potRight)/1.125.
+// Constraint: potBarrier > potLeft and potBarrier > potRight.
+let potLeft = 0, potBarrier = 1, potRight = 0;
+const _W = 1.5;
 const _wellPos = [-_W, _W];
 
-function updatePotential() {
-  potDepth = +document.getElementById('potDepth').value;
-  potTilt  = +document.getElementById('potTilt').value;
-}
-
-const V = x =>
-  potDepth * Math.sin(Math.PI * (x + _W) / (2 * _W)) ** 2
-  + potTilt * potDepth * (x / _W);
+const V = x => {
+  const kL = (potBarrier - potLeft)  / 1.125;
+  const kR = (potBarrier - potRight) / 1.125;
+  if (x <= -0.75) return kL * (x + 1.5) ** 2 + potLeft;
+  if (x <=  0)    return potBarrier - kL * x ** 2;
+  if (x <=  0.75) return potBarrier - kR * x ** 2;
+  return kR * (x - 1.5) ** 2 + potRight;
+};
 
 // ─── Dynamic config ───────────────────────────────────────────────────────────
 let N, TEMPS, COLORS, REPLICA_COLORS, STEP_SZ;
@@ -369,22 +431,59 @@ const REPLICA_PALETTE = [
   '#86efac', // sage
 ];
 
+let customTemps = [];
+
+function computeExactExchangeRate(T1, T2, sortedVs) {
+  const BINS = sortedVs.length;
+  const Vmin = sortedVs[0];
+  const db = 1 / T1 - 1 / T2;
+  function sortedW(T) {
+    const w = sortedVs.map(v => Math.exp((Vmin - v) / T));
+    const Z = w.reduce((a, b) => a + b, 0);
+    return w.map(wi => wi / Z);
+  }
+  const sw1 = sortedW(T1), sw2 = sortedW(T2);
+  const cdf2 = new Float64Array(BINS);
+  cdf2[0] = sw2[0];
+  for (let k = 1; k < BINS; k++) cdf2[k] = cdf2[k - 1] + sw2[k];
+  const tail = new Float64Array(BINS);
+  for (let j = BINS - 2; j >= 0; j--) {
+    const decay = Math.exp(db * (sortedVs[j] - sortedVs[j + 1]));
+    tail[j] = decay * (sw2[j + 1] + tail[j + 1]);
+  }
+  let acc = 0;
+  for (let j = 0; j < BINS; j++) acc += sw1[j] * (cdf2[j] + tail[j]);
+  return acc;
+}
+
 function buildConfig() {
-  N       = +document.getElementById('nReplicas').value;
-  const tMinLog = +document.getElementById('tMin').value;
-  const tMaxLog = +document.getElementById('tMax').value;
-  const tMinV = Math.pow(10, tMinLog);
-  const tMaxV = Math.pow(10, tMaxLog);
-  TEMPS   = Array.from({length: N}, (_, i) =>
-    N === 1 ? tMinV : tMinV * Math.pow(tMaxV / tMinV, i / (N - 1)));
-  COLORS         = Array.from({length: N}, (_, i) => tempColor(i, N));  // T1…TN slot colors — thermal gradient
-  REPLICA_COLORS = Array.from({length: N}, (_, i) => REPLICA_PALETTE[i % REPLICA_PALETTE.length]); // R1…RN — categorical
-  STEP_SZ = TEMPS.map(T => 0.55 * Math.sqrt(T));
+  N = +document.getElementById('nReplicas').value;
+  const tMinV = Math.pow(10, +document.getElementById('tMin').value);
+  const tMaxV = Math.pow(10, +document.getElementById('tMax').value);
+  if (customTemps.length === N) {
+    customTemps = customTemps.map(T => Math.max(tMinV, Math.min(tMaxV, T)));
+  } else {
+    customTemps = Array.from({length: N}, (_, i) =>
+      N === 1 ? tMinV : tMinV * Math.pow(tMaxV / tMinV, i / (N - 1)));
+  }
+  TEMPS          = customTemps.slice();
+  COLORS         = Array.from({length: N}, (_, i) => tempColor(i, N));
+  REPLICA_COLORS = Array.from({length: N}, (_, i) => REPLICA_PALETTE[i % REPLICA_PALETTE.length]);
+  STEP_SZ        = TEMPS.map(T => +document.getElementById('stepAlpha').value * Math.sqrt(T));
 }
 
 // ─── State ────────────────────────────────────────────────────────────────────
 let initMode = 'random';
 let draggedReplica = null, wasDragged = false;
+let potDragMode = null;  // null | 'barrier' | 'left' | 'right'
+let potEditMode = false;
+let plotVMin = -0.2, plotVMax = 1.2;  // y-axis range, updated when drag ends
+
+function updatePlotRange() {
+  const pad = (potBarrier - Math.min(potLeft, potRight)) * 0.25 + 0.05;
+  plotVMin = Math.min(potLeft, potRight) - pad;
+  plotVMax = potBarrier + pad;
+}
 
 let replicas;
 let swapAttempts = 0, swapAccepts = 0, roundTrips = 0, totalSteps = 0;
@@ -398,7 +497,6 @@ let replicaPhase;
 let focusedReplica = null;   // replica index (ri), or null for no focus
 
 function initState() {
-  updatePotential();
   buildConfig();
   const startX = initStartPositions();
   replicas = TEMPS.map((T, i) => ({ x: startX[i], tempIdx: i }));
@@ -510,20 +608,24 @@ function drawLandscape() {
   const PAD = { t: 30*devicePixelRatio, b: 44*devicePixelRatio,
                 l: 44*devicePixelRatio, r: 20*devicePixelRatio };
   const pw = W - PAD.l - PAD.r, ph = H - PAD.t - PAD.b;
-  const V_MIN = -Math.abs(potTilt) * potDepth - 0.1;
-  const V_MAX =  4.5;   // fixed — matches slider max of 4
+  const V_MIN = plotVMin, V_MAX = plotVMax;
 
   const cx = x => PAD.l + (x - X_MIN) / (X_MAX - X_MIN) * pw;
   const cy = v => PAD.t + (1 - (v - V_MIN) / (V_MAX - V_MIN)) * ph;
+
+  // Clip all curve drawing to the plot area
+  lct.save();
+  lct.beginPath();
+  lct.rect(PAD.l, PAD.t, pw, ph);
+  lct.clip();
 
   // Potential fill
   lct.beginPath();
   for (let i = 0; i <= 300; i++) {
     const x = X_MIN + i/300*(X_MAX-X_MIN);
-    const y = cy(Math.min(V(x), V_MAX));
-    i === 0 ? lct.moveTo(cx(x), y) : lct.lineTo(cx(x), y);
+    i === 0 ? lct.moveTo(cx(x), cy(V(x))) : lct.lineTo(cx(x), cy(V(x)));
   }
-  lct.lineTo(cx(X_MAX), H-PAD.b); lct.lineTo(cx(X_MIN), H-PAD.b); lct.closePath();
+  lct.lineTo(cx(X_MAX), PAD.t + ph); lct.lineTo(cx(X_MIN), PAD.t + ph); lct.closePath();
   lct.fillStyle = 'rgba(48,54,61,0.25)'; lct.fill();
 
   // Potential curve
@@ -534,6 +636,8 @@ function drawLandscape() {
     i === 0 ? lct.moveTo(cx(x), cy(V(x))) : lct.lineTo(cx(x), cy(V(x)));
   }
   lct.stroke();
+
+  lct.restore();
 
   // Axis labels
   lct.fillStyle = '#484f58'; lct.font = `${11*devicePixelRatio}px sans-serif`;
@@ -548,6 +652,31 @@ function drawLandscape() {
     lct.beginPath(); lct.strokeStyle = '#30363d'; lct.lineWidth = devicePixelRatio;
     lct.moveTo(cx(xi), H-PAD.b); lct.lineTo(cx(xi), H-PAD.b+4*devicePixelRatio); lct.stroke();
   });
+
+  // Potential handles — only shown in edit mode
+  if (potEditMode) {
+    const handles = [
+      { key: 'barrier', wx: 0,   wy: potBarrier },
+      { key: 'right',   wx: _W,  wy: potRight  },
+      { key: 'left',    wx: -_W, wy: potLeft   },
+    ];
+    handles.forEach(({ key, wx, wy }) => {
+      const hx = cx(wx), hy = cy(wy);
+      const sz = 6 * devicePixelRatio;
+      const active = potDragMode === key;
+      lct.save();
+      lct.translate(hx, hy); lct.rotate(Math.PI / 4);
+      lct.beginPath();
+      lct.rect(-sz, -sz, sz * 2, sz * 2);
+      lct.fillStyle   = active ? '#ffffff' : '#c9d1d9';
+      lct.strokeStyle = '#0d1117';
+      lct.lineWidth   = 1.5 * devicePixelRatio;
+      lct.globalAlpha = 0.9;
+      lct.fill(); lct.stroke();
+      lct.restore();
+      lct.globalAlpha = 1;
+    });
+  }
 
   // Replicas — hottest drawn first (underneath), focused last (on top)
   const sorted = [...replicas.entries()]
@@ -577,7 +706,7 @@ function drawLadder() {
   rct.clearRect(0, 0, W, H);
 
   const PAD = { t: 30*devicePixelRatio, b: 28*devicePixelRatio,
-                l: 20*devicePixelRatio, r: 86*devicePixelRatio };
+                l: 20*devicePixelRatio, r: 24*devicePixelRatio };
   const pw = W - PAD.l - PAD.r, ph = H - PAD.t - PAD.b;
 
   const hist = ladderHistory;
@@ -594,7 +723,7 @@ function drawLadder() {
 
     rct.fillStyle = COLORS[t]; rct.font = `${10*devicePixelRatio}px sans-serif`;
     rct.textAlign = 'left';
-    rct.fillText(`T${t+1} = ${fmt(TEMPS[t])}`, W-PAD.r+6*devicePixelRatio, y+4*devicePixelRatio);
+    rct.fillText(`T${t+1}`, W-PAD.r+6*devicePixelRatio, y+4*devicePixelRatio);
   }
 
   rct.fillStyle = '#484f58'; rct.font = `${10*devicePixelRatio}px sans-serif`;
@@ -689,10 +818,12 @@ function drawOccupancy() {
 
   // Theoretical Boltzmann PDF: exp(−V(x)/T) / Z(T), same normalisation as histogram
   const theory = Array.from({length: N}, (_, t) => {
-    const raw = Array.from({length: N_BINS}, (_, b) => {
+    const logW = Array.from({length: N_BINS}, (_, b) => {
       const x = X_MIN + (b + 0.5) / N_BINS * (X_MAX - X_MIN);
-      return Math.exp(-V(x) / TEMPS[t]);
+      return -V(x) / TEMPS[t];
     });
+    const logMax = Math.max(...logW);
+    const raw = logW.map(lw => Math.exp(lw - logMax));
     const Z = raw.reduce((s, v) => s + v, 0);
     return raw.map(v => v / Z);
   });
@@ -841,15 +972,29 @@ function drawMixing() {
   mct.fillText('REPLICA TEMPERATURE MIXING', PAD.l, 15*devicePixelRatio);
 }
 
+// ─── Formula display ─────────────────────────────────────────────────────────
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmt(v) {
-  return v < 0.1 ? v.toFixed(3) : v < 1 ? v.toFixed(2) : v.toFixed(1);
+  const exp = Math.floor(Math.log10(v));
+  if (exp >= -2 && exp <= 2) return v < 0.1 ? v.toFixed(3) : v < 1 ? v.toFixed(2) : v.toFixed(1);
+  const mant = v / Math.pow(10, exp);
+  const mantStr = Math.abs(mant - 1) < 0.01 ? '' : mant.toFixed(1) + '×';
+  return `${mantStr}10^${exp}`;
+}
+function fmtHTML(v) {
+  const exp = Math.floor(Math.log10(v));
+  if (exp >= -2 && exp <= 2) return v < 0.1 ? v.toFixed(3) : v < 1 ? v.toFixed(2) : v.toFixed(1);
+  const mant = v / Math.pow(10, exp);
+  const mantStr = Math.abs(mant - 1) < 0.01 ? '' : mant.toFixed(1) + '×';
+  return `${mantStr}10<sup>${exp}</sup>`;
 }
 
 // ─── Legend ───────────────────────────────────────────────────────────────────
 function buildReplicaTable() {
   document.getElementById('tblReplicaTrips').innerHTML = Array.from({length: N}, (_, ri) =>
     `<tr data-ri="${ri}" style="cursor:pointer"><td><span style="color:${REPLICA_COLORS[ri]}">R${ri+1}</span></td>` +
+    `<td class="trip-count-n">—</td>` +
     `<td class="trip-count">—</td></tr>`
   ).join('');
 }
@@ -860,49 +1005,40 @@ function fmtSteps(n) {
   return Math.round(n).toString();
 }
 
-function buildLegend() {
-  const el = document.getElementById('legend');
-  el.innerHTML = '';
-  TEMPS.forEach((T, i) => {
-    const item = document.createElement('div'); item.className = 'leg-item';
-    item.style.cursor = 'pointer';
-    item.style.userSelect = 'none';
-    const dot  = document.createElement('div'); dot.className  = 'leg-dot';
-    dot.style.background = REPLICA_COLORS[i];
-    item.appendChild(dot);
-    item.appendChild(document.createTextNode(`R${i+1}`));
-    item.addEventListener('click', () => {
-      focusedReplica = (focusedReplica === i) ? null : i;
-      updateLegendFocus();
-    });
-    el.appendChild(item);
-  });
-  updateLegendFocus();
-}
-
-function updateLegendFocus() {
-  document.querySelectorAll('#legend .leg-item').forEach((item, i) => {
-    item.style.opacity = (focusedReplica === null || focusedReplica === i) ? '1' : '0.25';
-  });
-}
+function buildLegend() {}
+function updateLegendFocus() {}
 
 // ─── Stats ────────────────────────────────────────────────────────────────────
 function updateStats() {
   document.getElementById('statStep').textContent = totalSteps.toLocaleString();
 
   const overallRate = swapAttempts > 0 ? (swapAccepts/swapAttempts*100).toFixed(1)+'%' : '—';
+  const BINS = 200;
+  const raw = Array.from({length: BINS}, (_, b) => V(X_MIN + (b + 0.5) / BINS * (X_MAX - X_MIN)));
+  const sortedVs = raw.slice().sort((a, b) => a - b);
+  const expectedRates = TEMPS.slice(0, -1).map((T, k) =>
+    computeExactExchangeRate(T, TEMPS[k + 1], sortedVs));
+  const avgExpected = expectedRates.length
+    ? (expectedRates.reduce((s, v) => s + v, 0) / expectedRates.length * 100).toFixed(1) + '%' : '—';
   document.getElementById('tblPairRates').innerHTML =
     swapPairAttempts.map((att, k) =>
-      `<tr><td>T${k+1} ↔ T${k+2}</td><td>${att > 0 ? (swapPairAccepts[k]/att*100).toFixed(1)+'%' : '—'}</td></tr>`
+      `<tr>
+        <td style="color:${COLORS[k]}">T${k+1} ↔ T${k+2}</td>
+        <td>${att > 0 ? (swapPairAccepts[k]/att*100).toFixed(1)+'%' : '—'}</td>
+        <td style="color:${COLORS[k]}">${expectedRates[k] !== undefined ? (expectedRates[k]*100).toFixed(1)+'%' : '—'}</td>
+      </tr>`
     ).join('') +
-    `<tr class="tbl-total"><td>Average</td><td>${overallRate}</td></tr>`;
+    `<tr class="tbl-total"><td>Average</td><td>${overallRate}</td><td>${avgExpected}</td></tr>`;
 
   document.querySelectorAll('#tblReplicaTrips tr').forEach((row, ri) => {
     row.style.opacity = focusedReplica === null || focusedReplica === ri ? 1 : 0.25;
     const n = replicaRoundTrips[ri];
-    row.querySelector('.trip-count').textContent = n > 0 ? fmtSteps(totalSteps / n) : '—';
+    row.querySelector('.trip-count-n').textContent = n > 0 ? n : '—';
+    row.querySelector('.trip-count').textContent   = n > 0 ? fmtSteps(totalSteps / n) : '—';
   });
   const tripsWithData = replicaRoundTrips.filter(n => n > 0);
+  document.getElementById('tblTripsTotalN').textContent =
+    tripsWithData.length > 0 ? (roundTrips / N).toFixed(1) : '—';
   document.getElementById('tblTripsTotal').textContent =
     tripsWithData.length > 0
       ? fmtSteps(tripsWithData.reduce((s, n) => s + totalSteps / n, 0) / tripsWithData.length)
@@ -914,21 +1050,23 @@ function syncParamDisplay() {
   document.getElementById('nReplicasVal').textContent = document.getElementById('nReplicas').value;
   const tMinLog = +document.getElementById('tMin').value;
   const tMaxLog = +document.getElementById('tMax').value;
-  document.getElementById('tMinVal').textContent = fmt(Math.pow(10, tMinLog));
-  document.getElementById('tMaxVal').textContent = fmt(Math.pow(10, tMaxLog));
-  updatePotential();
-  document.getElementById('potDepthVal').textContent = potDepth.toFixed(2);
-  document.getElementById('potTiltVal').textContent  = potTilt.toFixed(2);
+  document.getElementById('tMinVal').innerHTML = fmtHTML(Math.pow(10, tMinLog));
+  document.getElementById('tMaxVal').innerHTML = fmtHTML(Math.pow(10, tMaxLog));
+  document.getElementById('stepAlphaVal').textContent = document.getElementById('stepAlpha').value;
+  pushUrlState();
 }
 
 ['nReplicas','tMin','tMax'].forEach(id => {
-  document.getElementById(id).addEventListener('input', () => { focusedReplica = null; syncParamDisplay(); initState(); updateLegendFocus(); });
+  document.getElementById(id).addEventListener('input', () => {
+    focusedReplica = null; syncParamDisplay(); initState(); updateLegendFocus(); drawTempLine();
+  });
 });
 
-// Potential sliders update live without resetting the simulation
-['potDepth','potTilt'].forEach(id => {
-  document.getElementById(id).addEventListener('input', syncParamDisplay);
+document.getElementById('stepAlpha').addEventListener('input', () => {
+  syncParamDisplay();
+  STEP_SZ = TEMPS.map(T => +document.getElementById('stepAlpha').value * Math.sqrt(T));
 });
+
 
 // ─── Animation loop ───────────────────────────────────────────────────────────
 // Map slider 1–12 to steps/frame on a log scale: ~0.2 at min, ~60 at max
@@ -972,17 +1110,39 @@ function getLcvHitInfo(clientX, clientY) {
   const padL = 44*dpr, padR = 20*dpr, padT = 30*dpr, padB = 44*dpr;
   const pw = lcv.width  - padL - padR;
   const ph = lcv.height - padT - padB;
-  const V_MIN = -Math.abs(potTilt) * potDepth - 0.1, V_MAX = 4.5;
+  const V_MIN = plotVMin, V_MAX = plotVMax;
   const cx = x => padL + (x - X_MIN) / (X_MAX - X_MIN) * pw;
   const cy = v => padT + (1 - (v - V_MIN) / (V_MAX - V_MIN)) * ph;
   const xFromPx = px => X_MIN + (px - padL) / pw * (X_MAX - X_MIN);
-  return { mx, my, cx, cy, xFromPx };
+  const cyInv   = py => V_MIN + (1 - (py - padT) / ph) * (V_MAX - V_MIN);
+  return { mx, my, cx, cy, cyInv, xFromPx };
 }
 
-// ─── Custom-mode drag ─────────────────────────────────────────────────────────
+// ─── Landscape drag (potential handles + custom-mode replicas) ────────────────
+function potHandleHit(mx, my, cx, cy) {
+  const handles = [
+    { key: 'barrier', wx: 0,   wy: potBarrier },
+    { key: 'right',   wx: _W,  wy: potRight  },
+    { key: 'left',    wx: -_W, wy: potLeft   },
+  ];
+  const HIT = 14 * devicePixelRatio;
+  for (const { key, wx, wy } of handles) {
+    if (Math.abs(cx(wx) - mx) < HIT && Math.abs(cy(wy) - my) < HIT) return key;
+  }
+  return null;
+}
+
 lcv.addEventListener('mousedown', e => {
-  if (initMode !== 'custom') return;
   const { mx, my, cx, cy } = getLcvHitInfo(e.clientX, e.clientY);
+
+  // Potential handles take priority (only in edit mode)
+  if (potEditMode) {
+    const hit = potHandleHit(mx, my, cx, cy);
+    if (hit) { potDragMode = hit; e.preventDefault(); return; }
+  }
+
+  // Replica drag (custom mode only)
+  if (initMode !== 'custom') return;
   let closest = null, bestDist = Infinity;
   replicas.forEach((r, ri) => {
     const dx = cx(r.x) - mx, dy = cy(V(r.x)) - my;
@@ -997,27 +1157,46 @@ lcv.addEventListener('mousedown', e => {
 });
 
 window.addEventListener('mousemove', e => {
-  if (draggedReplica === null) return;
-  wasDragged = true;
-  const { xFromPx, mx: _ } = getLcvHitInfo(e.clientX, e.clientY);
+  const { mx, my, cyInv, xFromPx } = getLcvHitInfo(e.clientX, e.clientY);
   const rect = lcv.getBoundingClientRect();
   const px = (e.clientX - rect.left) * (lcv.width / rect.width);
+
+  if (potDragMode === 'barrier' || potDragMode === 'right' || potDragMode === 'left') {
+    const dpr = devicePixelRatio;
+    const padT = 30*dpr, padB = 44*dpr;
+    const clampedMy = Math.max(padT, Math.min(lcv.height - padB, my));
+    const v = cyInv(clampedMy);
+    if (potDragMode === 'barrier') potBarrier = Math.max(Math.max(potLeft, potRight) + 0.05, v);
+    else if (potDragMode === 'right') potRight = Math.min(potBarrier - 0.05, v);
+    else potLeft = Math.min(potBarrier - 0.05, v);
+    return;
+  }
+
+  if (draggedReplica === null) return;
+  wasDragged = true;
   replicas[draggedReplica].x = Math.max(X_MIN + 0.01, Math.min(X_MAX - 0.01, xFromPx(px)));
 });
 
-window.addEventListener('mouseup', () => { draggedReplica = null; });
+window.addEventListener('mouseup', () => {
+  if (potDragMode) { potDragMode = null; updatePlotRange(); pushUrlState(); }
+  draggedReplica = null;
+});
 
-// Cursor: grab when hovering a dot in custom mode
+// Cursor: grab on handles always; grab on replica dots in custom mode
 lcv.addEventListener('mousemove', e => {
-  if (initMode !== 'custom') { lcv.style.cursor = 'pointer'; return; }
-  if (draggedReplica !== null) { lcv.style.cursor = 'grabbing'; return; }
+  if (potDragMode || draggedReplica !== null) { lcv.style.cursor = 'grabbing'; return; }
   const { mx, my, cx, cy } = getLcvHitInfo(e.clientX, e.clientY);
-  let minDist = Infinity;
-  replicas.forEach(r => {
-    const dx = cx(r.x) - mx, dy = cy(V(r.x)) - my;
-    minDist = Math.min(minDist, Math.sqrt(dx*dx + dy*dy));
-  });
-  lcv.style.cursor = minDist < 20 * devicePixelRatio ? 'grab' : 'default';
+  if (potEditMode && potHandleHit(mx, my, cx, cy)) { lcv.style.cursor = 'grab'; return; }
+  if (initMode === 'custom') {
+    let minDist = Infinity;
+    replicas.forEach(r => {
+      const dx = cx(r.x) - mx, dy = cy(V(r.x)) - my;
+      minDist = Math.min(minDist, Math.sqrt(dx*dx + dy*dy));
+    });
+    lcv.style.cursor = minDist < 20 * devicePixelRatio ? 'grab' : 'default';
+    return;
+  }
+  lcv.style.cursor = 'pointer';
 });
 
 // ─── Controls ─────────────────────────────────────────────────────────────────
@@ -1030,8 +1209,28 @@ document.getElementById('btnRex').addEventListener('click', function() {
   rexOn = !rexOn;
   this.textContent = rexOn ? 'Swaps ON' : 'Swaps OFF';
   this.classList.toggle('active', rexOn);
+  pushUrlState();
 });
-document.getElementById('btnReset').addEventListener('click', () => { focusedReplica = null; initState(); updateLegendFocus(); });
+document.getElementById('btnReset').addEventListener('click', () => { focusedReplica = null; initState(); updateLegendFocus(); drawTempLine(); });
+
+function setInteractMode(mode) {
+  // mode: null | 'move' | 'pot'
+  initMode   = mode === 'move' ? 'custom' : 'random';
+  potEditMode = mode === 'pot';
+  document.getElementById('btnMoveReplicas').classList.toggle('active', mode === 'move');
+  document.getElementById('btnPotEdit').classList.toggle('active', mode === 'pot');
+  drawLandscape();
+}
+
+document.getElementById('btnMoveReplicas').addEventListener('click', () => {
+  const next = initMode !== 'custom' ? 'move' : null;
+  setInteractMode(next);
+  pushUrlState();
+});
+document.getElementById('btnPotEdit').addEventListener('click', () => {
+  const next = !potEditMode ? 'pot' : null;
+  setInteractMode(next);
+});
 
 // Clicking anywhere outside an interactive element clears replica selection
 document.addEventListener('click', e => {
@@ -1049,15 +1248,195 @@ document.getElementById('tblReplicaTrips').addEventListener('click', e => {
   updateLegendFocus();
 });
 
-['initRandom','initSpaced','initCustom'].forEach(id => {
-  document.getElementById(id).addEventListener('click', () => {
-    initMode = { initRandom:'random', initSpaced:'spaced', initCustom:'custom' }[id];
-    document.getElementById('initRandom').classList.toggle('active', initMode === 'random');
-    document.getElementById('initSpaced').classList.toggle('active', initMode === 'spaced');
-    document.getElementById('initCustom').classList.toggle('active', initMode === 'custom');
-    if (initMode !== 'custom') initState();   // custom: keep current positions, just enable dragging
+
+
+
+// ─── Temperature line canvas ──────────────────────────────────────────────────
+const tlv = document.getElementById('tempLine');
+const tlt = tlv.getContext('2d');
+let tempLineDrag = null;   // index of dot being dragged, or null
+let tempAxisScale = 'linear';  // 'linear' | 'log'
+
+new ResizeObserver(() => drawTempLine()).observe(document.getElementById('tempLineWrap'));
+
+// Left/right edge handles — drag either side to resize symmetrically around center
+const tempWrap = document.getElementById('tempLineWrap');
+let tempWrapDrag = null;
+
+function initTempWrapWidth() {
+  tempWrap.style.width = '320px';
+}
+
+['tempHandleLeft','tempHandleRight'].forEach(id => {
+  document.getElementById(id).addEventListener('mousedown', e => {
+    tempWrapDrag = { side: id === 'tempHandleLeft' ? 'left' : 'right',
+                     startX: e.clientX, startWidth: tempWrap.offsetWidth };
+    e.preventDefault();
   });
 });
+
+window.addEventListener('mousemove', e => {
+  if (!tempWrapDrag) return;
+  const dx = e.clientX - tempWrapDrag.startX;
+  const delta = tempWrapDrag.side === 'right' ? dx : -dx;
+  const maxW = document.getElementById('tempSchedSection').offsetWidth;
+  tempWrap.style.width = Math.min(maxW, Math.max(200, tempWrapDrag.startWidth + 2 * delta)) + 'px';
+});
+
+window.addEventListener('mouseup', () => { tempWrapDrag = null; });
+
+document.getElementById('tempAxisLinear').addEventListener('click', () => {
+  tempAxisScale = 'linear';
+  document.getElementById('tempAxisLinear').classList.add('active');
+  document.getElementById('tempAxisLog').classList.remove('active');
+  drawTempLine();
+});
+document.getElementById('tempAxisLog').addEventListener('click', () => {
+  tempAxisScale = 'log';
+  document.getElementById('tempAxisLog').classList.add('active');
+  document.getElementById('tempAxisLinear').classList.remove('active');
+  drawTempLine();
+});
+
+function tempLineLayout() {
+  const dpr = devicePixelRatio;
+  const W = tlv.width, H = tlv.height;
+  const padL = 10 * dpr, padR = 10 * dpr;
+  const pw = W - padL - padR;
+  const cy = H / 2;
+  const tMinV = Math.pow(10, +document.getElementById('tMin').value);
+  const tMaxV = Math.pow(10, +document.getElementById('tMax').value);
+  const toX = tempAxisScale === 'log'
+    ? T => padL + Math.log10(T / tMinV) / Math.log10(tMaxV / tMinV) * pw
+    : T => padL + (T - tMinV) / (tMaxV - tMinV) * pw;
+  const fromX = tempAxisScale === 'log'
+    ? px => tMinV * Math.pow(tMaxV / tMinV, (px - padL) / pw)
+    : px => tMinV + (px - padL) / pw * (tMaxV - tMinV);
+  return { W, H, padL, padR, pw, cy, tMinV, tMaxV, toX, fromX, dpr };
+}
+
+function drawTempLine() {
+  const dpr = devicePixelRatio;
+  tlv.width  = tlv.offsetWidth  * dpr;
+  tlv.height = tlv.offsetHeight * dpr;
+  const { W, H, cy, toX, tMinV, tMaxV } = tempLineLayout();
+
+  tlt.clearRect(0, 0, W, H);
+
+  // Axis line
+  tlt.beginPath();
+  tlt.strokeStyle = '#30363d';
+  tlt.lineWidth = 1.5 * dpr;
+  tlt.moveTo(toX(tMinV), cy);
+  tlt.lineTo(toX(tMaxV), cy);
+  tlt.stroke();
+
+  // End ticks
+  [tMinV, tMaxV].forEach(T => {
+    tlt.beginPath();
+    tlt.strokeStyle = '#484f58';
+    tlt.lineWidth = dpr;
+    tlt.moveTo(toX(T), cy - 5*dpr);
+    tlt.lineTo(toX(T), cy + 5*dpr);
+    tlt.stroke();
+    tlt.fillStyle = '#484f58';
+    tlt.font = `${9*dpr}px sans-serif`;
+    tlt.textAlign = T === tMinV ? 'left' : 'right';
+    tlt.fillText(fmt(T), toX(T), cy + 14*dpr);
+  });
+
+  if (!TEMPS) return;
+
+  // Connecting lines between dots
+  tlt.beginPath();
+  tlt.strokeStyle = '#30363d';
+  tlt.lineWidth = dpr;
+  TEMPS.forEach((T, i) => {
+    i === 0 ? tlt.moveTo(toX(T), cy) : tlt.lineTo(toX(T), cy);
+  });
+  tlt.stroke();
+
+  // Diamonds
+  TEMPS.forEach((T, i) => {
+    const x = toX(T);
+    const sz = 5 * dpr;
+    tlt.save();
+    tlt.translate(x, cy);
+    tlt.rotate(Math.PI / 4);
+    tlt.beginPath();
+    tlt.rect(-sz, -sz, sz * 2, sz * 2);
+    tlt.fillStyle = COLORS[i];
+    tlt.globalAlpha = tempLineDrag === i ? 1 : 0.85;
+    tlt.fill();
+    tlt.strokeStyle = tempLineDrag === i ? '#ffffff' : '#0d1117';
+    tlt.lineWidth = 1.5 * dpr;
+    tlt.globalAlpha = 1;
+    tlt.stroke();
+    tlt.restore();
+  });
+}
+
+tlv.addEventListener('mousedown', e => {
+  const rect = tlv.getBoundingClientRect();
+  const dpr = devicePixelRatio;
+  const mx = (e.clientX - rect.left) * dpr;
+  const { toX } = tempLineLayout();
+  const HIT = 10 * dpr;
+  let best = null, bestDist = Infinity;
+  TEMPS.forEach((T, i) => {
+    const d = Math.abs(toX(T) - mx);
+    if (d < HIT && d < bestDist) { bestDist = d; best = i; }
+  });
+  if (best !== null) { tempLineDrag = best; e.preventDefault(); }
+});
+
+window.addEventListener('mousemove', e => {
+  if (tempLineDrag === null) return;
+  const rect = tlv.getBoundingClientRect();
+  const dpr = devicePixelRatio;
+  const px = (e.clientX - rect.left) * dpr;
+  const { fromX, tMinV, tMaxV } = tempLineLayout();
+  let v = Math.max(tMinV, Math.min(tMaxV, fromX(px)));
+  // enforce ordering
+  if (tempLineDrag > 0)         v = Math.max(v, TEMPS[tempLineDrag - 1]);
+  if (tempLineDrag < N - 1)     v = Math.min(v, TEMPS[tempLineDrag + 1]);
+  customTemps[tempLineDrag] = v;
+  TEMPS[tempLineDrag] = v;
+  STEP_SZ[tempLineDrag] = 0.55 * Math.sqrt(v);
+  drawTempLine();
+});
+
+window.addEventListener('mouseup', () => {
+  if (tempLineDrag !== null) { tempLineDrag = null; drawTempLine(); pushUrlState(); }
+});
+
+// Tooltip on temp line diamonds
+const tempTooltip = document.getElementById('tempTooltip');
+tlv.addEventListener('mousemove', e => {
+  const rect = tlv.getBoundingClientRect();
+  const dpr = devicePixelRatio;
+  const mx = (e.clientX - rect.left) * dpr;
+  const { toX } = tempLineLayout();
+  const HIT = 10 * dpr;
+  let best = null, bestDist = Infinity;
+  TEMPS.forEach((T, i) => {
+    const d = Math.abs(toX(T) - mx);
+    if (d < HIT && d < bestDist) { bestDist = d; best = i; }
+  });
+  if (best !== null) {
+    tempTooltip.innerHTML = `T${best + 1} = ${fmtHTML(TEMPS[best])}`;
+    tempTooltip.style.display = 'block';
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    tempTooltip.style.left = (x + 10) + 'px';
+    tempTooltip.style.top  = (y - 24) + 'px';
+    tlv.style.cursor = 'default';
+  } else {
+    tempTooltip.style.display = 'none';
+    tlv.style.cursor = 'grab';
+  }
+});
+tlv.addEventListener('mouseleave', () => { tempTooltip.style.display = 'none'; });
 
 // Click on ladder to focus/unfocus a replica
 rcv.addEventListener('click', e => {
@@ -1117,10 +1496,66 @@ lcv.addEventListener('click', e => {
   updateLegendFocus();
 });
 
+// ─── URL state ────────────────────────────────────────────────────────────────
+function pushUrlState() {
+  const p = new URLSearchParams({
+    nrep:     document.getElementById('nReplicas').value,
+    tmin:     document.getElementById('tMin').value,
+    tmax:     document.getElementById('tMax').value,
+    barrier:  potBarrier,
+    leftwell: potLeft,
+    rightwell: potRight,
+    step:  document.getElementById('stepAlpha').value,
+    speed: document.getElementById('speed').value,
+    rex:   rexOn   ? '1' : '0',
+  });
+  if (customTemps.length)
+    p.set('ctemps', customTemps.map(t => t.toPrecision(4)).join(','));
+  history.replaceState(null, '', '?' + p.toString());
+}
+
+function clampPotential() {
+  potBarrier = Math.max(potBarrier, Math.max(potLeft, potRight) + 0.05);
+}
+
+function loadFromUrl() {
+  const p = new URLSearchParams(location.search);
+  if (p.has('nrep') || p.has('n'))
+    document.getElementById('nReplicas').value = p.get('nrep') ?? p.get('n');
+  if (p.has('tmin'))  document.getElementById('tMin').value      = p.get('tmin');
+  if (p.has('tmax'))  document.getElementById('tMax').value      = p.get('tmax');
+  if (p.has('barrier'))  potBarrier = +p.get('barrier');
+  if (p.has('leftwell') || p.has('left'))
+    potLeft  = +(p.get('leftwell') ?? p.get('left'));
+  if (p.has('rightwell') || p.has('right'))
+    potRight = +(p.get('rightwell') ?? p.get('right'));
+  if (p.has('step'))  document.getElementById('stepAlpha').value = p.get('step');
+  if (p.has('speed')) document.getElementById('speed').value     = p.get('speed');
+  if (p.has('rex')) {
+    rexOn = p.get('rex') === '1';
+    document.getElementById('btnRex').textContent = rexOn ? 'Swaps ON' : 'Swaps OFF';
+    document.getElementById('btnRex').classList.toggle('active', rexOn);
+  }
+  if (p.has('ctemps')) {
+    customTemps = p.get('ctemps').split(',').map(Number);
+  }
+  clampPotential();
+}
+
 // ─── Boot ─────────────────────────────────────────────────────────────────────
-updatePotential();
+renderMathInElement(document.body, {
+  delimiters: [
+    { left: '\\(', right: '\\)', display: false },
+    { left: '\\[', right: '\\]', display: true  },
+  ],
+  throwOnError: false,
+});
+loadFromUrl();
 syncParamDisplay();
+updatePlotRange();
+initTempWrapWidth();
 initState();
+drawTempLine();
 frame();
 </script>
 </body>
