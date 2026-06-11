@@ -342,15 +342,6 @@
 
 <div class="ctrl-section" id="tempSchedSection">
   <div class="ctrl-group-label">Temperature Schedule</div>
-  <div class="controls" style="justify-content:center;">
-    <div style="display:flex;align-items:center;gap:6px;">
-      <span style="font-size:0.75rem;color:#8b949e;">Scale</span>
-      <div class="btn-group" style="border:none; gap:6px;">
-        <button id="tempAxisLinear" class="active">Linear</button>
-        <button id="tempAxisLog">Log</button>
-      </div>
-    </div>
-  </div>
   <div id="tempLineWrap">
     <div class="temp-edge-handle" id="tempHandleLeft"></div>
     <div class="temp-edge-handle" id="tempHandleRight"></div>
@@ -358,6 +349,15 @@
     <div id="tempTooltip" style="display:none;position:absolute;pointer-events:none;
       background:#161b22;border:1px solid #30363d;border-radius:4px;
       padding:3px 7px;font-size:0.75rem;color:#e6edf3;white-space:nowrap;z-index:10;"></div>
+  </div>
+  <div class="controls" style="justify-content:center;margin-top:8px;">
+    <div style="display:flex;align-items:center;gap:6px;" title="Changes how the axis above is drawn — does not change the temperature values themselves">
+      <span style="font-size:0.75rem;color:#8b949e;">Axis scale</span>
+      <div class="btn-group" style="border:none; gap:6px;">
+        <button id="tempAxisLinear" class="active">Linear</button>
+        <button id="tempAxisLog">Log</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -384,7 +384,7 @@
 </div>
 
 
-<footer>replica.exchange &nbsp;·&nbsp; <a href="https://claude.ai" target="_blank">Built with Claude</a></footer>
+<footer>replica.exchange &nbsp;·&nbsp; <a href="https://lockhartlab.org" target="_blank">Lockhart Lab</a> &nbsp;·&nbsp; <a href="https://claude.ai" target="_blank">Built with Claude</a></footer>
 
 <script>
 // ─── Potential ────────────────────────────────────────────────────────────────
